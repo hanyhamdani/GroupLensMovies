@@ -1,0 +1,401 @@
+---
+title: "HW2 Analysis"
+author: "Srikanth"
+date: "11/21/2021"
+output: pdf_document
+---
+Falomy Eugene (48686864), Syed Hassan Raza (48372523), Allen Mattam (48686903), Adhithya Madhavan (47705259), Srikanth Soma (48692883)
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+
+```{r, include = FALSE, message=FALSE, warning=FALSE}
+library(dplyr)
+library(tidyr)
+library(tidyverse)
+library(ggplot2)
+library(car)
+library(broom)
+library(GGally)
+library(psych)
+library(purrr)
+
+library(e1071)
+library(ggplot2)
+library(ggExtra)
+library(gridExtra)
+library(pROC)
+library(ROCit)
+library(psych)
+library(caret)
+library(regclass)
+library(rpart)
+library(rpart.plot)
+library(splitstackshape)
+library(caTools)
+
+
+```
+# Executive Summary
+## *Our goal is to find out what makes a great movie.* 
+We've considered movies from 1906 to 2014 and considered major factors that influenced the success of a movie. Through this analysis we've realized that there are some major factors that have a significant influence on the success of a movie. 
+
+## *Our analysis has brought us to realize that:*
+### 1. Director has a 85% impact on good movies
+### 2. Cast has a 74% impact on good movies
+### 3. Production company involved has a 60% impact on good movies
+
+## We have also noticed that the popularity of a movie can be caused using the marketing efforts that the movie crew implement, but always has a chance of attaining low rating after the relase of a film. 
+## Popularity is the interest created prior to the release of a movie. 
+
+## Marginal effects
+
+From this insight we can realize that pumping in excess money for marketing prior to the release of movies has a 59% impact of a movie being successful.
+
+## *Assumptions that we have used*
+We have considered a list of:
+1. Top 22 directors according to IMDB as "Good Production Companies"
+2. Top 71 actors according to IMDB as "Good Production Companies"
+3. Top 16 production companies according to IMDB as "Good Production Companies"
+
+According to Aristotle, "the whole is greater than the sum of its parts". We do realize that it's difficult to state that a certain factor has an absolute impact on the end result without considering the impact of all the factors collectively. In other words, we wanted to be mindful of endogeneity. 
+
+
+```{r, message=FALSE, warning=FALSE, fig.show='hide', results='hide'}
+mov <- read.csv("C:/Users/allen/Documents/SMU/CLASSES/FALL/MOD B/MAST 6251 - Predictive Analytics/HW2/Clean_HW2.csv")
+names(mov)[1] <- 'id'
+mov <- mov %>%  mutate(Verdict = if_else(mov$W_Rating >= 6, 1, 0))
+head(mov,20)
+```
+```{r, message=FALSE, warning=FALSE, fig.show='hide', results='hide'}
+str(mov)
+```
+```{r, message=FALSE, warning=FALSE, fig.show='hide', results='hide'}
+summary(mov)
+```
+
+```{r, message=FALSE, warning=FALSE, fig.show='hide', results='hide'}
+describe(mov)
+```
+```{r, message=FALSE, warning=FALSE, fig.show='hide', results='hide'}
+list <- colnames(mov[,c(2,3,6,7,14,15,16,37)])
+list
+```
+
+
+```{r, message=FALSE, warning=FALSE, fig.show='hide', results='hide'}
+head(mov[list])
+```
+
+
+```{r, message=FALSE, warning=FALSE, fig.show='hide', results='hide'}
+multi.hist(mov[list], nrow=3,ncol=3,global=FALSE)
+```
+
+
+```{r, message=FALSE, warning=FALSE, fig.show='hide', results='hide'}
+list2 <- colnames(mov[,c(2,3,6,7,14,15,16,37)])
+```
+
+
+```{r, message=FALSE, warning=FALSE, fig.show='hide', results='hide'}
+##Let us check if there is any corelation
+
+# ggpairs(mov[list2])
+# ggsave("correlation.pdf",height=5)
+```
+
+
+```{r, message=FALSE, warning=FALSE, fig.show='hide', results='hide'}
+
+#There seems to be some correlation between revenue and verdict, higher correlation between vote count and Verdict(0.603) or vote average and Verdict (0.56)
+
+plot(mov$belongs_to_collection,mov$W_Rating)
+```
+
+```{r, message=FALSE, warning=FALSE, fig.show='hide', results='hide'}
+
+#So movies that have sequels are not necessarily successful. 
+
+plot(mov$popularity,mov$revenue)
+```
+
+```{r, message=FALSE, warning=FALSE, fig.show='hide', results='hide'}
+
+#More Popular movies have earned good revenue, some less popular movies also earned good revenue. However, the data undermines time factor in assessing the revenue. We may therefore adjust the revenue for time(inflation). 
+
+plot(mov$vote_count,mov$W_rating)
+```
+
+```{r, message=FALSE, warning=FALSE, fig.show='hide', results='hide'}
+
+#This appears strange. Many movies that have fewer votes are having a very high rating!! We need to identify the movies and the reasons.
+
+plot(mov$popularity,mov$W_Rating)
+```
+
+```{r, message=FALSE, warning=FALSE, fig.show='hide', results='hide'}
+
+#Create a new dataframe based on the specific cols we intended to input in our following model
+
+df <- mov[,c("Verdict", "belongs_to_collection", "popularity","runtime", "cast_score", "director_score","production_score")]
+str(df)
+```
+
+
+```{r, message=FALSE, warning=FALSE, fig.show='hide', results='hide'}
+
+#This step we partition the data into a training set (70%) and a validation set (30%)
+
+set.seed(1234)
+split <- sample.split(df, SplitRatio = 0.7)
+train_data1 <- subset(df, split == "TRUE")
+test_data1 <- subset(df, split == "FALSE")
+```
+
+
+
+```{r, message=FALSE, warning=FALSE, fig.show='hide', results='hide'}
+
+#Based on the training data build logistic model 
+
+logit <- glm(Verdict~., data = train_data1, family = "binomial")
+summary(logit)
+
+# This code will rank the variable by level of importance ( Not sure if that is needed)
+varImp(logit)
+```
+```{r, message=FALSE, warning=FALSE, fig.show='hide', results='hide'}
+tidy(logit) %>% mutate(estimate = round(estimate,2),
+                         statistic = round(statistic,2),
+                         p.value = round(p.value,3),
+                         std.error = NULL)
+```
+
+```{r, message=FALSE, warning=FALSE, fig.show='hide', results='hide'}
+
+# This step provide the testing for the logit model as well as roc statistics
+
+p_glm <- predict(logit,newdata = test_data1)
+roc(test_data1$Verdict,p_glm)
+plot(roc(test_data1$Verdict,p_glm))
+```
+
+
+```{r, message=FALSE, warning=FALSE, fig.show='hide', results='hide'}
+
+# Confusion Matrix
+
+confusionmatrix<- confusion_matrix(logit,test_data1)
+confusionmatrix
+```
+
+
+
+```{r, message=FALSE, warning=FALSE, fig.show='hide', results='hide'}
+
+#This step we provide the accuracy, misclassification rate, true positive rate, false positive rate, specificity, precision, and prevalence statistics.
+
+classifications <- predict(logit,newdata=test_data1)
+#confusionmatrix <- confusion_matrix(classifications,test_data1$Verdict, positive = "1")
+nb_cm <- data.frame(matrix(ncol = 1,nrow = 4))
+rownames(nb_cm) <- c('accuracy', 'misclassification', 'specificity', 'precision')
+
+
+colnames(nb_cm) <- 'values'
+nb_cm['accuracy',1] <- (12860+43)/13042
+nb_cm['misclassification',1] <- 1 - ((12860+43)/13042)
+nb_cm['specificity',1] <- 43/(43+32)
+nb_cm['precision',1] <- 12860/(12860+32)
+
+
+nb_cm
+
+# take away given the logistic regression. I will use the following formula...exp(B0 + B1x+ ...+BkXk) / 1+ exp(B0 + B1x+ ...+BkXk)
+# note that, all the 7 variables used in the model aobve are significant because their p-values are less than 0.05 significant level.
+# We have a (AUC of over 96), which means that our x variables have perfectly predicted y
+# That also put our model accuracy to above 98%, that could mean that our model is over fitting
+
+```
+
+
+
+
+
+
+
+
+```{r, message=FALSE, warning=FALSE, fig.show='hide', results='hide'}
+#For the Intercept
+exp(-10.356980 ) # odds
+
+exp(-10.356980 )/(1+exp(-10.356980 ))
+
+```
+
+
+```{r, message=FALSE, warning=FALSE, fig.show='hide', results='hide'}
+
+# Know that the intercept,which oftens labled as the constant, is the expexted value of y(verdict or good/bad rating) when all the x or independent variables are zero. We noticed  that the intercept is negative, that means that the odd of a movie being a good movie given our independent variable is lower than the baseline. In other words, the relationship is negative.
+
+```
+
+```{r, message=FALSE, warning=FALSE, fig.show='hide', results='hide'}
+# for belongs_to_collection
+
+exp(-0.291088  ) # odds
+
+exp(-0.291088 )/(1+exp(-0.291088 )) # 43%
+```
+
+```{r, message=FALSE, warning=FALSE, fig.show='hide', results='hide'}
+# Given the coefiiciennt is negative, that means belong_to_collection ahs negative relatu=ionship with the dependent variable. In this case, verdict. The probability that a movie is caractegorized as a bad movie is 43 percent assuming everything remains constant.
+
+```
+
+```{r, message=FALSE, warning=FALSE, fig.show='hide', results='hide'}
+# For popularity
+exp(0.365437  ) # odds
+
+exp(0.365437  )/(1+exp(0.365437  ))
+
+#Assuming all other variables remain fixed:
+#The probabilty of a movie being a good movie is 59% given its popularity. 
+
+#(in recommendation, we consider factor that can make a movie popular, for instance, we can elaborate on the fact that an influence actor can increase the likelyhood of a movie's popularity and so on.)
+
+```
+
+
+```{r, message=FALSE, warning=FALSE, fig.show='hide', results='hide'}
+# For Run_time
+exp( 0.023752) # odds
+
+exp( 0.023752 )/(1+exp( 0.023752))
+
+# 51% percent of time, a movie is rated good because of its runtime. (I think Hassan put a limitation on th runtime when cleaning, but sure to explein that.)
+
+```
+
+
+
+```{r, message=FALSE, warning=FALSE, fig.show='hide', results='hide'}
+#For cat_score
+
+exp(1.043093) # odds
+
+exp( 1.043093 )/(1+exp( 1.043093))
+
+# There is 84% increase in the odds of a movie being a good movie or rated as good movie given the who is in the cast. and the probability of that happening is 74%.
+
+# (In our recommendation, we can talk about the importance of having a good cast, but take into consideration the cost of having certain people being part of the cast)
+
+```
+
+
+```{r, message=FALSE, warning=FALSE, fig.show='hide', results='hide'}
+
+#director_score
+
+exp(1.714095) # odds
+
+exp( 1.714095 )/(1+exp(1.714095))
+
+# The probality of a movie being good given who's dirrecting it is 85%. 
+
+#(Their might other factors influencing such result that is not in the model, that is what we would refer to as endogneity... maybe the more well known the director is, the more budget available for the director in question )
+
+```
+
+
+
+```{r, message=FALSE, warning=FALSE, fig.show='hide', results='hide'}
+#For production_score 
+
+exp(0.405110) # odds
+
+exp(0.405110 )/(1+exp(0.405110))
+
+# (Not sure what the production score is), the probability that a movie is a good movie given its "production score" is 60 %.
+
+# I can elaborate more once I know what the production score is.
+
+```
+
+
+```{r, message=FALSE, warning=FALSE, fig.show='hide', results='hide'}
+#browser()
+```
+
+
+########################################################################################################
+
+
+#Another very strange observation, There are many movies that have very high popularity but have very low ratings, and viceversa. 
+```{r, message=FALSE, warning=FALSE, fig.show='hide', results='hide'}
+reglog <- glm(Verdict~belongs_to_collection+popularity+runtime+cast_score+director_score+production_score,data=df,family='binomial')
+summary(reglog)
+```
+
+```{r, message=FALSE, warning=FALSE, fig.show='hide', results='hide'}
+tidy(reglog) %>% mutate(estimate = round(estimate,2),
+                         statistic = round(statistic,2),
+                         p.value = round(p.value,3),
+                         std.error = NULL)
+```
+
+```{r, message=FALSE, warning=FALSE, fig.show='hide', results='hide'}
+regdf1=data.frame(belongs_to_collection = 1, popularity = 12, revenue=200000,runtime=150, cast_score =2,director_score =0,production_score=1)
+regdf2=data.frame(belongs_to_collection = 0, popularity = 12, revenue=500000,runtime=150, cast_score =3,director_score =1,production_score=1)
+regdf3=data.frame(belongs_to_collection = 1, popularity = 2, revenue=500000,runtime=150, cast_score =1,director_score =0,production_score=0)
+regdf4=data.frame(belongs_to_collection = 1, popularity = 10, revenue=500000,runtime=150, cast_score =2,director_score =1,production_score=0)
+predict(reglog,regdf1)
+predict(reglog,regdf2)
+predict(reglog,regdf3)
+predict(reglog,regdf4)
+```
+
+```{r, message=FALSE, warning=FALSE, fig.show='hide', results='hide'}
+predict(reglog,regdf1,type='response')
+predict(reglog,regdf2,type='response')
+predict(reglog,regdf3,type='response')
+predict(reglog,regdf4,type='response')
+```
+
+```{r, message=FALSE, warning=FALSE, fig.show='hide', results='hide'}
+testBeta1 = data.frame(belongs_to_collection = 1, popularity = c(1,2,5,6,11,12), revenue=200000,runtime=150, cast_score =2,director_score =0,production_score=1)
+predpop  = predict(reglog,testBeta1)
+predpop
+```
+
+```{r, message=FALSE, warning=FALSE, fig.show='hide', results='hide'}
+mvXyr <- mov %>% group_by(mov['release_year']) %>% summarize(Animation=sum(Animation), Action=sum(Action), Crime =sum(Crime), Thriller=sum(Thriller),sum(Comedy),sum(Drama),sum(Family),sum(Horror))
+head(mvXyr)
+```
+
+```{r, message=FALSE, warning=FALSE, fig.show='hide', results='hide'}
+singlemov <- read.csv("C:/Users/allen/Documents/SMU/CLASSES/FALL/MOD B/MAST 6251 - Predictive Analytics/HW2/HW 2 Data/single_value_HW2.csv")
+
+```
+# Conclusion
+## *Our goal is to find out what makes a great movie.* 
+We acknoledge the fact that it takes many factors to play in togther to make a great movie that the viwers hold close to their heart and admire, but from our analysis we've observed a few things. 
+
+It is important to have a famous cast that are great actors, but what is as if not more important is to have a great director to create a vision for the movie. 
+
+## *Our analysis has brought us to realize that:*
+### 1. Director has a 85% impact on good movies
+### 2. Cast has a 74% impact on good movies
+### 3. Production company involved has a 60% impact on good movies
+
+
+```{r, message=FALSE, warning=FALSE, fig.show='hide', results='hide'}
+
+```
+
+```{r, message=FALSE, warning=FALSE, fig.show='hide', results='hide'}
+
+```
+
